@@ -21,3 +21,5 @@ body.display-expanded #display,#display:fullscreen{position:fixed;inset:0;z-inde
 .keymap-grid{display:grid;grid-template-columns:1fr 1fr;gap:30px}.keymap-grid h3{font-size:12px;letter-spacing:1px;text-transform:uppercase;margin:22px 0 12px}
 .keymap-grid dl{margin:0;display:grid;grid-template-columns:1fr;gap:4px}.keymap-grid dt{font:600 11px monospace}.keymap-grid dd{margin:0 0 10px;color:#606755;font-size:12px;line-height:1.4}.keymap-card>p{border-top:1px solid #d3d5ca;padding-top:14px;font-size:11px}
 @media(max-width:600px){#keymap{padding:12px}.keymap-card{padding:20px;max-height:calc(100dvh - 24px)}.keymap-grid{grid-template-columns:1fr;gap:0}.keymap-heading h2{font-size:23px}}
+select { width:100%;margin:8px 0 18px;padding:10px;background:#151917;color:#eee;border:1px solid #505550;border-radius:4px;font:inherit; }
+.fractal-mode #display { image-rendering:auto; }

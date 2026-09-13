@@ -40,17 +40,18 @@ class GPUDeepRenderer {
   static pack(value, sourceBits, bits) {
     // Serialization only. Orbit, escape and pixel coordinate arithmetic run in WGSL.
     let magnitude = (value < 0n ? -value : value) << BigInt(bits-sourceBits);
-    const words = new Uint32Array(bits/16+3);
+    const words = new Uint32Array(bits/16+5);
     for (let i=0;i<words.length-1;i++) { words[i]=Number(magnitude&65535n); magnitude >>= 16n; }
     words[words.length-1]=value<0n ? 1 : 0;
     return words;
   }
 
-  async pipeline(bits) {
-    if (!this.pipelines.has(bits)) {
+  async pipeline(bits,fast=false) {
+    const key=`${bits}:${fast}`;
+    if (!this.pipelines.has(key)) {
       const pending = (async () => {
         const d=await this.ready;
-        const module=d.createShaderModule({code:gpuKernels(bits)});
+        const module=d.createShaderModule({code:gpuKernels(bits,fast)});
         const info=await module.getCompilationInfo();
         const errors=info.messages.filter(message=>message.type==='error');
         if(errors.length) throw new Error(errors.map(error=>error.message).join('\n'));
@@ -67,11 +68,11 @@ class GPUDeepRenderer {
         }));
         return {layout,programs};
       })();
-      this.pipelines.set(bits,pending);
+      this.pipelines.set(key,pending);
       // Keep only a few precision tiers; old pipelines can otherwise accumulate.
       if(this.pipelines.size>3) this.pipelines.delete(this.pipelines.keys().next().value);
     }
-    return this.pipelines.get(bits);
+    return this.pipelines.get(key);
   }
 
   static refinementLevels(width,height,previewSize=32) {
@@ -82,7 +83,7 @@ class GPUDeepRenderer {
     return levels;
   }
 
-  async render(view,width,height,onFrame,{previewSize=32}={}) {
+  async render(view,width,height,onFrame,{previewSize=32,referenceQuality=false,limit:requestedLimit,stripe=0,sampleX=0,sampleY=0,samples=1,endpoint=false,fastPreview=false,fastMath=false}={}) {
     const id=++this.generation, started=performance.now();
     // Snapshot input before shader compilation yields; subsequent controller
     // events belong to the next generation, including its precision tier.
@@ -92,14 +93,15 @@ class GPUDeepRenderer {
     // Extra guard limbs reduce accumulated fixed-point truncation error. Perturbation
     // cancellation is separately detected and repaired by the direct GPU path.
     const bits=Math.ceil((view.bits+64)/64)*64;
-    const limit=Math.max(512,Math.ceil(256+48*Math.max(0,view.logZoom)));
-    if(!Number.isSafeInteger(limit) || (limit+1)*16>d.limits.maxStorageBufferBindingSize)
+    const limit=requestedLimit ?? Math.max(512,Math.ceil(256+48*Math.max(0,view.logZoom)));
+    if(!Number.isSafeInteger(limit) || (limit+1)*32>d.limits.maxStorageBufferBindingSize)
       throw new Error('GPU reference-orbit memory limit reached');
     if(width>16384 || height>16384 || bits>16384)
       throw new Error('GPU precision or image resource budget reached');
-    const {layout,programs}=await this.pipeline(bits);
+    const approximate=fastMath||(fastPreview&&Math.max(width,height)>previewSize);
+    let {layout,programs}=await this.pipeline(bits,approximate);
     if(!this.check(id)) return;
-    const stride=(bits/16+3)*4, tileSize=4096, perturbTileSize=16384, owned=[];
+    const stride=(bits/16+5)*4, tileSize=4096, perturbTileSize=16384, owned=[];
     const buffer=(size,usage) => {
       if(size>d.limits.maxBufferSize || ((usage&GPUBufferUsage.STORAGE)&&size>d.limits.maxStorageBufferBindingSize))
         throw new Error('GPU buffer resource limit reached');
@@ -107,15 +109,15 @@ class GPUDeepRenderer {
     };
     try {
       const storage=GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC;
-      const parameterStride=Math.max(32,d.limits.minUniformBufferOffsetAlignment);
+      const parameterStride=Math.max(64,d.limits.minUniformBufferOffsetAlignment);
       const params=buffer(parameterStride*16,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST);
       const coords=buffer(stride*3,storage), reference=buffer(stride*6,storage);
-      const orbit=buffer((limit+1)*16,storage), stop=buffer((perturbTileSize+2)*4,storage);
-      const delta=buffer(perturbTileSize*16,storage), output=buffer(perturbTileSize*4,storage);
+      const orbit=buffer((limit+1)*32,storage), stop=buffer((perturbTileSize+2)*4,storage);
+      const delta=buffer(perturbTileSize*96,storage), output=buffer(perturbTileSize*20,storage);
       const exact=buffer(tileSize*6*stride,storage);
-      const staging=buffer(Math.max(perturbTileSize*4,stride*4),GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ);
+      const staging=buffer(Math.max(perturbTileSize*20,stride*4),GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ);
       if(checkpoint) {
-        const oldStride=checkpoint.bits/16+3, shift=(bits-checkpoint.bits)/16;
+        const oldStride=checkpoint.bits/16+5, shift=(bits-checkpoint.bits)/16;
         for(let i=0;i<3;i++) {
           const words=new Uint32Array(stride/4);
           words.set(checkpoint.words.subarray(i*oldStride,(i+1)*oldStride-1),shift);
@@ -126,15 +128,19 @@ class GPUDeepRenderer {
           d.queue.writeBuffer(coords,i*stride,GPUDeepRenderer.pack(value,seed.bits,bits));
       d.queue.writeBuffer(stop,0,new Uint32Array([limit]));
       const group=d.createBindGroup({layout,entries:[params,coords,reference,orbit,stop,delta,output,exact]
-        .map((b,binding)=>({binding,resource:binding===0?{buffer:b,size:32}:{buffer:b}}))});
+        .map((b,binding)=>({binding,resource:binding===0?{buffer:b,size:64}:{buffer:b}}))});
       let maxBatchMs=0, batches=0;
       const dispatch=async(name,w,h,begin,end,offset,count,repairPositions=false) => {
         if(!this.check(id)) return false;
         const entries=Array.isArray(name)?name:[name];
         const steps=entries.includes('direct')?Math.min(16,end-begin):1;
         const parameters=new Uint32Array(parameterStride*steps/4);
-        for(let slot=0;slot<steps;slot++) parameters.set(
-          [w,h,limit,begin+slot,steps>1?begin+slot+1:end,offset,count,repairPositions?2:this.forceDirect?1:0],slot*parameterStride/4);
+        for(let slot=0;slot<steps;slot++) {
+          const base=slot*parameterStride/4;
+          parameters.set([w,h,limit,begin+slot,steps>1?begin+slot+1:end,offset,count,repairPositions?2:this.forceDirect?1:0,
+            referenceQuality?1:0,0,sampleX,sampleY,samples,endpoint?1:0,0,0],base);
+          new Float32Array(parameters.buffer)[base+9]=stripe;
+        }
         d.queue.writeBuffer(params,0,parameters);
         const start=performance.now(), encoder=d.createCommandEncoder();
         // Separate parameter slots keep each iteration's uniforms immutable
@@ -182,8 +188,11 @@ class GPUDeepRenderer {
       let repairs=0;
       const levels=GPUDeepRenderer.refinementLevels(width,height,previewSize);
       for(const level of levels) {
+        const isPreview=approximate&&level===levels[0];
+        if(approximate&&!isPreview)programs=(await this.pipeline(bits)).programs;
         const factor=level/Math.max(width,height), w=Math.max(1,Math.round(width*factor)), h=Math.max(1,Math.round(height*factor));
         const values=new Float32Array(w*h).fill(-2);
+        const attributes=referenceQuality?new Float32Array(w*h*4):null;
         for(let offset=0;offset<values.length;offset+=perturbTileSize) {
           const count=Math.min(perturbTileSize,values.length-offset);
           for(let begin=0;begin<limit;begin+=128) {
@@ -199,6 +208,7 @@ class GPUDeepRenderer {
           if(data.some(value=>!Number.isFinite(value)||value===-2))
             throw new Error('GPU calculation incomplete; reset the view to retry');
           values.set(data,offset);
+          if(attributes) attributes.set(new Float32Array(await read(output,count*20)).subarray(count),offset*4);
         }
         // Repair sparse failures across the entire level together. Previously a
         // single difficult pixel restarted hundreds of waits for each 4096-pixel tile.
@@ -224,10 +234,14 @@ class GPUDeepRenderer {
           if(!this.check(id)) return;
           if(data.some(value=>!Number.isFinite(value)||value===-2||value===-3))
             throw new Error('GPU precision repair incomplete');
-          for(let i=0;i<count;i++) values[positions[i]]=data[i];
+          const attrs=attributes?new Float32Array(await read(output,count*20)).subarray(count):null;
+          for(let i=0;i<count;i++) {
+            values[positions[i]]=data[i];
+            if(attrs) attributes.set(attrs.subarray(i*4,i*4+4),positions[i]*4);
+          }
         }
         this.metrics={elapsedMs:performance.now()-started,maxBatchMs,batches,repairs,bits,width:w,height:h};
-        onFrame({values,width:w,height:h,complete:level===Math.max(width,height),metrics:this.metrics,
+        onFrame({values,attributes,width:w,height:h,approximate:isPreview,complete:level===Math.max(width,height),metrics:this.metrics,
           phase:level===Math.max(width,height)?(provenInterior?'REFINED · PROVEN INTERIOR':'REFINED · ITERATION-LIMIT BLACK'):`GPU REFINING · ${w} × ${h}`});
       }
     } finally { for(const b of owned) b.destroy(); }

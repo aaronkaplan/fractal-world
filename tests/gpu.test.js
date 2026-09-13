@@ -11,7 +11,7 @@
     const engine=new GPUDeepRenderer();
     await engine.ready;
     for(const bits of [192,1536]) {
-      const d=engine.device, stride=(bits/16+3)*4;
+      const d=engine.device, stride=(bits/16+5)*4;
       const a=GPUDeepRenderer.pack(-2n*(1n<<BigInt(bits))-(1n<<80n),bits,bits);
       const b=GPUDeepRenderer.pack(3n*(1n<<BigInt(bits))/4n,bits,bits);
       const input=d.createBuffer({size:stride*2,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
@@ -73,7 +73,7 @@
     engine.zoomCamera(before,moving.snapshot(),{x:3,y:0.5},4,2);
     engine.forceDirect=true;
     let moved;await engine.render(moving.snapshot(),4,2,frame=>{if(frame.complete)moved=frame;});
-    const checkpoint=engine.cameraCheckpoint, stride=checkpoint.bits/16+3;
+    const checkpoint=engine.cameraCheckpoint, stride=checkpoint.bits/16+5;
     const decode=index=>{let n=0n;for(let j=stride-2;j>=0;j--)n=(n<<16n)+BigInt(checkpoint.words[index*stride+j]);return checkpoint.words[(index+1)*stride-1]?-n:n;};
     const shift=BigInt(checkpoint.bits-moving.bits),tolerance=1n<<shift;
     for(const [i,value] of [moving.x,moving.y,moving.spanAt()].entries()) {

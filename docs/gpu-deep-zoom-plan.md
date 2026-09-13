@@ -2,6 +2,8 @@
 
 Implemented on 2026-09-12 in the existing JavaScript application, without new dependencies.
 
+The measurements below describe the historical `v1_working` implementation. The subsequent [reference-rendering adaptation](reference-rendering-plan.md) adds 64-bit integer significands, wider integer headroom, orbit attributes and nine-sample shading. Its final 1,339.4× compatibility-backend check used 641 submissions, had a maximum sampled escape error of 0.00000384, and measured warm full refinements of 2,142 / 2,131 / 2,131 ms. The application separately uses approximate, bounded-budget previews to keep navigation responsive. See the adaptation report for reference-quality image accuracy and convergence timings.
+
 ## Execution path
 
 - Shallow views retain the WebGL2 escape shader. Deep views use `gpu-math.js` (WGSL generators) and `gpu-deep.js` (WebGPU scheduling).

@@ -223,7 +223,10 @@
           return;
         }
         fractalImageDirty = false;
-      } else context.drawImage(mandelbrot.canvas, 0, 0);
+      } else {
+        context.fillStyle='#000';context.fillRect(0,0,width,height);
+        context.drawImage(mandelbrot.canvas, mandelbrot.viewport?.x||0, mandelbrot.viewport?.y||0);
+      }
       drawCursor();
       document.querySelector('#fractal-status').textContent = mandelbrot.status;
       document.querySelector('#fractal-palette-name').textContent = mandelbrot.paletteName;
@@ -373,6 +376,9 @@
   document.querySelector('#mode').addEventListener('click', toggleMode);
   document.querySelector('#fractal-reset').addEventListener('click', () => {
     mandelbrot.reset();
+    document.querySelector('#gallery-scene').value='';
+    document.querySelector('#fractal-quality').value='1';
+    document.querySelector('#fractal-iterations').value='5000';
     document.querySelector('#surface-height').value = mandelbrot.surface.heightScale;
     cursor.x = width / 2; cursor.y = height / 2;
     dirty = true; fractalImageDirty = true;
@@ -389,6 +395,23 @@
   }, { passive: false });
   document.querySelector('#color').addEventListener('click', cycleColor);
   document.querySelector('#fractal-palette').addEventListener('click', cyclePalette);
+  const gallerySelect=document.querySelector('#gallery-scene');
+  for(const scene of MandelbrotRenderer.scenes)gallerySelect.add(new Option(scene.name,scene.name));
+  gallerySelect.addEventListener('change',()=>{
+    if(!mandelbrot)return;
+    if(gallerySelect.value)mandelbrot.loadScene(gallerySelect.value);else mandelbrot.reset();
+    document.querySelector('#fractal-quality').value=String(mandelbrot.samples);
+    document.querySelector('#fractal-iterations').value=String(mandelbrot.maxIterations);
+    dirty=true;fractalImageDirty=true;
+  });
+  document.querySelector('#fractal-quality').addEventListener('change',event=>{
+    if(!mandelbrot)return;mandelbrot.samples=Number(event.target.value);
+    mandelbrot.pause();dirty=true;fractalImageDirty=true;
+  });
+  document.querySelector('#fractal-iterations').addEventListener('change',event=>{
+    if(!mandelbrot)return;mandelbrot.maxIterations=Number(event.target.value);
+    mandelbrot.pause();dirty=true;fractalImageDirty=true;
+  });
   document.querySelector('#surface-toggle').addEventListener('click', toggleSurface);
   document.querySelector('#surface-height').addEventListener('input', event => {
     if (!mandelbrot) return;
@@ -513,6 +536,8 @@
           ...(fractalMode?[`State: ${mandelbrot.status}`,`Detail: ${detail?`${detail.width} × ${detail.height}`:'WebGL direct'}`]:[]),
           ...(fractalMode && metrics?.elapsedMs!==undefined?[`GPU refinement: ${metrics.elapsedMs.toFixed(0)} ms elapsed · ${metrics.bits} bits`,
             `Queue batches: ${metrics.batches} · Repairs: ${metrics.repairs} · Max batch: ${metrics.maxBatchMs.toFixed(1)} ms`]:[]),
+          ...(deep&&mandelbrot.qualityMetrics?[`First preview: ${mandelbrot.qualityMetrics.firstPreviewMs?.toFixed(0)||'pending'} ms · ${mandelbrot.qualityMetrics.complete?'Converged':'Refining'}: ${mandelbrot.qualityMetrics.elapsedMs.toFixed(0)} ms`,
+            `Samples: ${mandelbrot.qualityMetrics.samples}/${mandelbrot.qualityMetrics.totalSamples} · ${mandelbrot.qualityMetrics.streaming?'Streaming accumulation':'Cached attributes'}`]:[]),
         ].join('\n');
       }
     }

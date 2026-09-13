@@ -12,6 +12,11 @@
     onFrame(data);
   },...options);
   try {
+    // This fixture measures navigation with an initialized renderer. Record
+    // cold shader startup separately instead of counting compilation as motion.
+    const cold=performance.now();
+    await Promise.all([renderer.gpuDeep.pipeline(192),renderer.gpuDeep.pipeline(192,true)]);
+    results.textContent=`Shader startup: ${Math.round(performance.now()-cold)} ms\n`;
     const levels=GPUDeepRenderer.refinementLevels(3456,1944,512);
     if(levels.join(',')!=='512,1024,2048,3456')throw new Error(`Large-display detail steps are missing: ${levels}`);
     renderer.view.zoom(Math.log(1339.4),cursor,width,height);
@@ -26,7 +31,7 @@
     await wait(700);clearInterval(interval);moving=false;
     const deadline=performance.now()+15000;
     while(renderer.refining && performance.now()<deadline) await wait(20);
-    results.textContent=`Moving preview widths: ${frames.filter(f=>f.moving).map(f=>f.width).join(', ')}\nFinal: ${renderer.status}`;
+    results.textContent+=`Moving preview widths: ${frames.filter(f=>f.moving).map(f=>f.width).join(', ')}\nFinal: ${renderer.status}`;
     if(!frames.some(f=>f.moving))throw new Error('No fresh background appeared while zooming');
     if(frames.some(f=>f.moving&&f.width<(width>1024?512:256)))throw new Error('Zooming repeatedly replaces the background with a tiny preview');
     if(renderer.refining || !frames.at(-1)?.complete || frames.at(-1).width!==width)throw new Error('Background did not finish refining after zoom stopped');

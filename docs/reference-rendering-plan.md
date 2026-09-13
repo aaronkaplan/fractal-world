@@ -1,6 +1,6 @@
 # Reference image compatibility: analysis and proposed plan
 
-Date: 2026-09-13. Status: analysis only; no renderer changes made.
+Date: 2026-09-13. Status: implemented and validated after baseline commit `e4a2efc`, tag `v1_working`. The original analysis below records the pre-adaptation behavior; implementation results follow at the end.
 
 Reference: [jlesuffleur/gpu_mandelbrot, pinned commit 001f45e](https://github.com/jlesuffleur/gpu_mandelbrot/blob/001f45e1e612132539edda232fa00ca73bd735a7/mandelbrot.py) and its [gallery recipes](https://github.com/jlesuffleur/gpu_mandelbrot/tree/001f45e1e612132539edda232fa00ca73bd735a7#gallery).
 
@@ -94,3 +94,44 @@ Use the exact decimal strings, without prematurely rounding through a JavaScript
 For a binary64 compatibility fixture, reproduce the reference's rounding of coordinate endpoints explicitly. For deep production navigation, retain decimal/high-precision coordinates. These are distinct numerical targets and should not be silently conflated.
 
 Success means a quantitatively checked Crown reproduction at these settings, followed by the other gallery styles, while preserving responsive GPU navigation. A palette-only change, increasing the bailout alone, or checking only cursor FPS does not meet that target.
+
+## Implementation results
+
+- Corrected the square root of the palette cycle, reference smoothing and radius, rounded 4,096-entry ramp position, stripe interpolation/initialization correction, analytic lighting, logarithmic distance modulation, stepped shading, and overlay order. Production calculations remain in GPU shaders.
+- Added exact-decimal gallery scene loading for all nine recipes, independent palette selection, configurable 1,000/2,500/5,000 iteration limits, and one- or nine-sample quality. Scene aspect is preserved, including cursor coordinate adjustment for letterboxing. The reference's default light settings are used by all gallery recipes.
+- Expanded multiprecision integer headroom from 32 to 64 bits and fixed large pixel multipliers/divisors for supersampled native dimensions. Derivatives use scaled exponents, and logarithmic distance avoids deep-view underflow.
+- A new independent fixture exposed accumulated perturbation error that the old cancellation ratio missed. Floating expansions did not retain their low components on the tested GPU compiler. The final implementation instead uses exact 64-bit integer significands with independent exponents, checked against integer fixtures to at least 60 significant bits. Propagated roundoff estimates trigger full-precision GPU repair. This remains a numerical safeguard, not an interval-arithmetic proof.
+- Added nine sequential subpixel passes, quantizing each shaded RGB sample before GPU float accumulation and averaging. Attributes are cached on the GPU for immediate recoloring where they fit the 192 MiB cache budget. Larger jobs retain a running GPU sum and one attribute sample; changing colors restarts refinement in that case. A forced-streaming fixture matches cached output within one channel level.
+- Responsive navigation uses an explicitly approximate GPU preview with a bounded iteration budget. Exact refinement follows at increasing spatial resolutions, then completes all selected subpixel samples. A 640 × 480 moving-view regression produced four fresh 256-pixel previews during 700 ms of input and converged to the latest view at 5,000 iterations. The navigation fixture records shader startup separately and waits for pipeline readiness before measuring motion.
+- Existing 3D terrain retains geometric lighting and zero-height black regions while using the new escape convention. Fifteen palettes, controller/keyboard controls, screenshots, and deep navigation remain supported.
+
+### Numerical and image evidence
+
+`tests/reference.html` tests exact-coordinate attributes and a complete 96 × 54, nine-sample image. The image oracle uses binary64 arithmetic and the original gallery endpoint coordinates; our production path uses higher-precision decimal coordinates. Sensitive boundaries consequently need not agree pixel-for-pixel.
+
+| Fixture | Maximum smooth-count error against exact-coordinate oracle | Image mean absolute RGB error, on a 0–255 scale | Maximum channel difference |
+| --- | ---: | ---: | ---: |
+| Crown | 0.0000434 | 3.5562 | 61 |
+| Pow (step shading) | 0.00000394 | 0.1983 | 14 |
+| Julia (plain lighting) | 0.0000145 | 1.0501 | 41 |
+
+Crown maximum normal-direction error was about 2.1 × 10⁻⁷, stripe error 3.1 × 10⁻⁷, and log-distance error 5.1 × 10⁻⁶. The complete 640 × 360 Crown scene also converged to nine samples in the application without browser errors. These measurements are distinct from a byte-identical comparison to the upstream PNG or execution of its CUDA runtime.
+
+Validation includes GPU arithmetic/coordinates through 10⁴⁰⁰×, forced direct repair, cancellation and device loss, fifteen palette images at 10¹²× and 10⁴⁰⁰× in 2D/3D, six surface checks, sixteen controls checks, and the moving-background fixture. Python screenshot tests pass with 99.03% coverage; that percentage measures the Python server, not JavaScript shaders. Ruff, Pylint and the configured Semgrep rules pass.
+
+### Remaining architectural tradeoffs
+
+The existing WebGPU-to-WebGL staging bridge is retained for integration with 3D and screenshot composition; it transports data through JavaScript but performs no CPU fractal calculation. Replacing it with WebGPU-native presentation is a future optimization. Changing iteration budgets restarts the calculation rather than resuming old per-pixel orbit states. Native nine-sample convergence can take substantially longer than the first preview. No new dependencies were installed.
+
+`tests/reference-performance.html` measures computed-preview readiness, full convergence, frame gaps, and retained sample count at 640 × 360; `?native` uses the screen's native width and `?scene=Pow` selects a second fixture. Preview timing ends when computed frame data becomes available, before the next browser presentation frame. Measurements include queue waits and transfers, not isolated GPU hardware timestamps.
+
+Single local runs at 5,000 iterations and nine samples:
+
+| Scene / output | Computed preview ready | Full convergence | Maximum animation-frame gap | Retained attribute samples |
+| --- | ---: | ---: | ---: | ---: |
+| Crown, 640 × 360 | 242 ms | 29.1 s | 35 ms | 9 |
+| Pow, native 3456 × 1944 | 260 ms | 71.3 s | 233 ms | 1 (streamed) |
+
+Both runs completed without WebGL errors. These measurements are not a claim of full-quality real-time rendering, and they compare different scenes/resolutions rather than constituting a scaling benchmark. Fast previews use a lower bounded iteration budget; completed reference samples always use the selected 5,000 iterations. The native streaming path exchanges recolor caching for bounded memory.
+
+Final compatibility-backend regression at 1,339.4×: 641 submissions, maximum sampled escape error 0.00000384, warm preview/full timings 134/2,142 ms, 132/2,131 ms, and 134/2,131 ms. The stronger arithmetic increases accurate full-frame cost compared with the historical baseline; interactive application previews use the separate fast path described above. Forced repairs across the 4,096-pixel batch boundary also passed. The configured dependency audit reported no known vulnerabilities.

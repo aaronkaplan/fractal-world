@@ -1,15 +1,17 @@
-# GPU Mandelbrot gallery palettes
+# GPU Mandelbrot reference rendering
 
 The Crown, Pow, Octogone, Julia, Lightning, Web, Wave, Tiles and Velvet RGB phase
-presets and the sine-ramp / square-root escape mapping are adapted from
+presets, escape smoothing, sine-ramp / square-root cycle mapping, orbit stripes,
+distance estimate, analytic normal lighting, step shading, overlay blending,
+and supersampling conventions are adapted from
 [Jérémy Lesuffleur's gpu_mandelbrot](https://github.com/jlesuffleur/gpu_mandelbrot).
-Sources: the gallery recipes in `readme.md` and `sin_colortable` / `color_pixel`
-in `mandelbrot.py` (master, inspected 2026-09-13).
+Sources: the gallery recipes in `readme.md` and `mandelbrot.py`, pinned at
+commit `001f45e1e612132539edda232fa00ca73bd735a7` (inspected 2026-09-13).
 
-This application evaluates the ramps in its existing WebGL shaders. It does not
-include the source project's CUDA/Python renderer, stripe shading, distance
-lighting or antialiasing. Thus the Crown palette shares the gallery's RGB ramp,
-while the final image depends on this application's scene and lighting.
+The application implements these calculations in WebGL2/WebGPU without importing
+the Python/CUDA runtime. Integer GPU arithmetic supports deeper coordinates;
+therefore sensitive boundary samples can differ from the reference's binary64
+results. The independent test oracle is confined to `tests/reference-oracle.js`.
 
 ## Upstream license
 

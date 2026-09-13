@@ -6,13 +6,30 @@ class PrecisionView {
   constructor() { this.reset(); }
 
   reset() {
+    this.exactSpan=null;this.exactLogZoom=null;this.sceneAspect=null;
     this.bits = 128;
     this.logZoom = 0;
     this.x = -(1n << 127n);
     this.y = 0n;
   }
 
+  setBounds(bounds) {
+    const parse=text=>{
+      const [base,exponent='0']=text.toLowerCase().split('e');
+      const decimals=(base.split('.')[1]||'').length;
+      const power=Number(exponent)-decimals;
+      const n=BigInt(base.replace('.',''));
+      const unit=1n<<BigInt(this.bits);
+      return power>=0?n*10n**BigInt(power)*unit:n*unit/10n**BigInt(-power);
+    };
+    const [left,right,bottom,top]=bounds.map(parse);
+    this.x=(left+right)/2n;this.y=(bottom+top)/2n;
+    this.exactSpan=top-bottom;this.sceneAspect=fixedRatio(right-left,top-bottom);
+    this.logZoom=Math.log2(3/this.number(this.exactSpan));this.exactLogZoom=this.logZoom;
+  }
+
   spanAt(logZoom = this.logZoom) {
+    if(this.exactSpan && logZoom===this.exactLogZoom)return this.exactSpan;
     const exponent = Math.floor(logZoom);
     const mantissa = BigInt(Math.round(3 * 2 ** (-(logZoom - exponent)) * 2 ** 50));
     const shift = this.bits - exponent - 50;
@@ -26,6 +43,7 @@ class PrecisionView {
       const shift = BigInt(nextBits - this.bits);
       this.x <<= shift;
       this.y <<= shift;
+      if(this.exactSpan)this.exactSpan <<= shift;
       this.bits = nextBits;
     }
     const difference = this.spanAt() - this.spanAt(next);

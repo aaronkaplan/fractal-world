@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Phosphor — Line Experiment</title>
-  <link rel="stylesheet" href="style.css?v=controls1">
-  <script src="gpu-math.js?v=perf11"></script><script src="gpu-deep.js?v=detail1"></script>
-<script src="precision.js" defer></script>
-  <script src="mandelbrot-shaders.js?v=controls1" defer></script>
-  <script src="mandelbrot-surface.js?v=zero-relief-1" defer></script>
-  <script src="mandelbrot.js?v=controls2" defer></script>
-  <script src="app.js?v=controls2" defer></script>
+  <link rel="stylesheet" href="style.css?v=107481010cad">
+  <script src="gpu-math.js?v=e06a179b2359"></script><script src="gpu-deep.js?v=a68fa142e37d"></script>
+<script src="precision.js?v=bc32aee8d1f4" defer></script>
+  <script src="mandelbrot-shaders.js?v=cec1aa7b9b9b" defer></script>
+  <script src="mandelbrot-surface.js?v=42b52a35af5f" defer></script>
+  <script src="mandelbrot.js?v=597f3c6db1cd" defer></script>
+  <script src="app.js?v=841266425eee" defer></script>
 </head>
 <body>
   <main>
@@ -54,6 +54,12 @@
         <p id="capture-status" class="controller-colors" role="status"></p>
         <p id="mode-error" role="alert"></p>
         <div id="fractal-controls" hidden>
+          <label for="gallery-scene">Gallery scene</label>
+          <select id="gallery-scene"><option value="">Explore freely</option></select>
+          <label for="fractal-quality">Image quality</label>
+          <select id="fractal-quality"><option value="1">Interactive · 1 sample</option><option value="3">Reference · 9 samples</option></select>
+          <label for="fractal-iterations">Iteration limit</label>
+          <select id="fractal-iterations"><option value="1000">1,000</option><option value="2500">2,500</option><option value="5000" selected>5,000 · gallery</option></select>
           <button id="surface-toggle" class="color-button">3 · Explore in 3D</button>
           <div id="surface-controls" hidden>
             <p>Height = escape time: slower escape rises higher.<br>Black regions = zero height. Continuous relief.</p>
