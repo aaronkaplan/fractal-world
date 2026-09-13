@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Phosphor — Line Experiment</title>
+  <link rel="stylesheet" href="style.css?v=controls1">
+  <script src="gpu-math.js?v=perf11"></script><script src="gpu-deep.js?v=detail1"></script>
+<script src="precision.js" defer></script>
+  <script src="mandelbrot-shaders.js?v=controls1" defer></script>
+  <script src="mandelbrot-surface.js?v=zero-relief-1" defer></script>
+  <script src="mandelbrot.js?v=controls2" defer></script>
+  <script src="app.js?v=controls2" defer></script>
+</head>
+<body>
+  <main>
+    <header><a class="wordmark" href="./">PHOSPHOR<span>®</span></a><span class="edition">EXPERIMENT 001 / RADIAL INTERFERENCE</span></header>
+    <section class="intro"><div class="eyebrow">A STUDY IN LINES & LIGHT</div><h1>Order. Meet interference.</h1><p>A single point. A thousand lines. Find the patterns in between.</p></section>
+    <section class="workbench" aria-label="Line experiment">
+      <div class="monitor">
+        <div class="monitor-top"><span>IBM <b>Personal System/2</b></span><span>VGA / 640 × 480</span></div>
+        <div class="screen"><canvas id="display" width="640" height="480" tabindex="0" aria-label="640 by 480 radial line drawing. Arrow keys move the cursor. X pins or releases the origin. Space rotates colors."></canvas>
+          <pre id="debug-info" hidden aria-label="Rendering debug information"></pre>
+          <section id="keymap" hidden role="dialog" aria-modal="true" aria-labelledby="keymap-title">
+            <div class="keymap-card">
+              <div class="keymap-heading"><div><span class="eyebrow">FLIGHT MANUAL</span><h2 id="keymap-title">Keys &amp; controls</h2></div><button id="keymap-close" aria-label="Close cheatsheet">Close <kbd>Esc</kbd></button></div>
+              <div class="keymap-grid">
+                <section><h3>Everywhere</h3><dl>
+                  <dt>? / Esc</dt><dd>Toggle help / close help</dd><dt>D</dt><dd>Toggle debug information</dd>
+                  <dt>Arrows / left stick</dt><dd>Move airplane cursor</dd><dt>Shift + arrows</dt><dd>Move slowly</dd>
+                  <dt>Space / RB / RT</dt><dd>Rotate colors; hold to keep cycling</dd><dt>C</dt><dd>Rotate colors one step</dd>
+                  <dt>B / Xbox B</dt><dd>Next color palette</dd><dt>V</dt><dd>Toggle native fullscreen</dd>
+                  <dt>S / Xbox Y</dt><dd>Save PNG in program directory</dd>
+                </dl></section>
+                <section><h3>Mandelbrot</h3><dl>
+                  <dt>M</dt><dd>Switch Mandelbrot / moiré</dd><dt>+ / − / wheel</dt><dd>Zoom toward cursor</dd>
+                  <dt>Right stick ↑ / ↓</dt><dd>Zoom in / out</dd><dt>3</dt><dd>Toggle 3D terrain</dd>
+                  <dt>I / J / K / L / drag</dt><dd>Orbit the 3D scene</dd><dt>Right stick ← / →</dt><dd>Orbit in 3D</dd>
+                </dl><h3>Moiré lines</h3><dl>
+                  <dt>X / Xbox X</dt><dd>Pin / release line origin</dd><dt>A</dt><dd>Draw a circle in 10 seconds</dd>
+                  <dt>Q</dt><dd>Draw the circle while cycling colors</dd>
+                </dl></section>
+              </div><p>Scene controls pause while this sheet is open.</p>
+            </div>
+          </section>
+        </div>
+        <div class="monitor-bottom"><span><i></i> DISPLAY ACTIVE</span><span class="monitor-brand">PS/2</span><div class="vents">▥▥▥▥▥</div></div>
+      </div>
+      <aside>
+        <p class="overlay-hint">Press <kbd>?</kbd> for controls · <kbd>D</kbd> for debug</p><div class="panel-heading"><span class="eyebrow">CONTROL ROOM</span><span class="live-dot">LIVE</span></div>
+        <button id="mode" class="color-button"><span>Mandelbrot explorer</span><kbd>M</kbd></button>
+        <p class="controller-colors">Space / RB / RT: rotate colors · hold to keep cycling</p>
+        <p class="controller-colors">Y / S: save screenshot to program directory</p>
+        <p id="capture-status" class="controller-colors" role="status"></p>
+        <p id="mode-error" role="alert"></p>
+        <div id="fractal-controls" hidden>
+          <button id="surface-toggle" class="color-button">3 · Explore in 3D</button>
+          <div id="surface-controls" hidden>
+            <p>Height = escape time: slower escape rises higher.<br>Black regions = zero height. Continuous relief.</p>
+            <p>Drag or I / J / K / L: orbit.<br>Right stick ← / →: orbit · ↑ / ↓: zoom.<br>3: return to 2D.</p>
+            <label for="surface-height">Height exaggeration</label>
+            <input id="surface-height" type="range" min="0.2" max="2.5" step="0.05" value="1.35">
+          </div>
+          <button id="fractal-palette" class="color-button"><span id="fractal-palette-name">Spectrum</span><kbd>B</kbd></button>
+          <p>B: next palette · Space / RB / RT: rotate its colors</p>
+          <p id="fractal-status" role="status">GPU MANDELBROT · FULL COLOR</p>
+          <p>Left stick / arrows: move zoom cursor.<br>Right stick ↑ / ↓: zoom in / out.<br>Keyboard + / − or mouse wheel to zoom.<br>V: fullscreen · M: return to lines.</p>
+          <button id="fractal-reset" class="reset">↺ &nbsp; Reset Mandelbrot view</button>
+        </div>
+        <div class="readout"><span>ORIGIN</span><strong id="coordinates">320 <em>/</em> 240</strong><span id="origin-state">FREE · MOVE TO EXPLORE</span></div>
+        <div class="setting"><label for="density">Ray density <output id="density-value">1,440</output></label><input id="density" type="range" min="180" max="3600" step="60" value="1440"><div class="range-labels"><span>SPARSE</span><span>DENSE</span></div></div>
+        <div class="setting"><label for="angle">Rotation <output id="angle-value">0.0°</output></label><input id="angle" type="range" min="0" max="90" step="0.1" value="0"></div>
+        <button id="color" class="color-button"><span><i id="swatch"></i><span id="palette-name">Classic white</span></span><kbd>C</kbd></button>
+        <button id="pin" class="primary">Pin origin <span>X</span></button>
+        <button id="reset" class="reset">↺ &nbsp; Reset experiment</button>
+        <div class="animation-controls">
+          <button id="animate" class="color-button"><span>Animate lines</span><kbd>A</kbd></button>
+          <button id="animate-palette" class="color-button"><span>Animate + cycle palette</span><kbd>Q</kbd></button>
+          <p id="animation-status">READY · 10 SECOND SWEEP</p>
+        </div>
+        <div class="instructions"><div><span>Move cursor</span><span><kbd>←</kbd> <kbd>↑</kbd> <kbd>↓</kbd> <kbd>→</kbd></span></div><div><span>Fine movement</span><span><kbd>SHIFT</kbd> + arrows</span></div><div><span>Pin / release origin</span><kbd>X</kbd></div><div><span>Cycle phosphor</span><kbd>C</kbd></div><div><span>Fullscreen / native resolution</span><kbd>V</kbd></div></div>
+        <div class="gamepad"><span id="gamepad-status">○ &nbsp; XBOX CONTROLLER READY</span><p>Connect and press a button to join.<br>Left stick / D-pad to move · X to pin</p></div>
+      </aside>
+    </section>
+    <footer><span>01 — THE MOIRÉ SERIES</span><p>Try a high ray density, then move slowly.<br>The interference is in the pixels.</p><span>NO SMOOTHING. JUST LINES.</span></footer>
+  </main>
+</body>
+</html>

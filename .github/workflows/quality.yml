@@ -1,0 +1,16 @@
+name: Code quality
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  scans:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked --python 3.14
+      - run: uv run --frozen pytest --cov=phosphor --cov-report=term-missing --cov-fail-under=90
+      - run: uv run --frozen ruff check src tests
+      - run: uv run --frozen pylint --source-roots=src src/phosphor tests/test_capture.py
+      - run: uv run --frozen semgrep scan --config .semgrep.yml --metrics off --error
+      - run: uv run --frozen pip-audit --local --progress-spinner off

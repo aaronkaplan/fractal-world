@@ -1,0 +1,20 @@
+rules:
+  - id: no-dynamic-python-execution
+    message: Do not execute dynamic Python code.
+    severity: ERROR
+    languages: [python]
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: exec(...)
+  - id: no-dynamic-javascript-execution
+    message: Avoid evaluating dynamically constructed JavaScript.
+    severity: ERROR
+    languages: [javascript]
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+  - id: no-document-write
+    message: Use DOM creation APIs instead of document.write.
+    severity: ERROR
+    languages: [javascript]
+    pattern: document.write(...)
