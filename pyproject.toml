@@ -26,7 +26,7 @@ max-line-length = 100
 dev = [
     "httpx==0.28.1",
     "pip-audit==2.10.1",
-    "pylint==4.0.8",
+    "pylint==4.0.9",
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
     "ruff==0.16.6",
